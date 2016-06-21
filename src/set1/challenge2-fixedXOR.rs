@@ -8,6 +8,8 @@ fn fixed_xor(buf1: &str, buf2: &str) -> String {
     assert_eq!(buf1.len(), buf2.len());
     let mut s = "".to_string();
     let mut group = 0;
+    // each character in the input represents 4 bits, so 8 characters will
+    // exactly fit in a u32
     while group*8 < buf1.len() {
         let (start, end) = (group*8, cmp::min((group+1)*8, buf1.len()));
         let slice1 = &buf1[start .. end];
