@@ -4,7 +4,7 @@ use std::cmp;
 
 /// Given two equal-length, hex-encoded strings, returns a hex-encoded string
 /// representing the XOR of the input strings
-fn fixed_xor(buf1: &str, buf2: &str) -> String {
+pub fn fixed_xor(buf1: &str, buf2: &str) -> String {
     assert_eq!(buf1.len(), buf2.len());
     let mut s = "".to_string();
     let mut group = 0;

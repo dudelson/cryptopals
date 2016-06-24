@@ -18,7 +18,7 @@ use std::collections;
 
 /// given a hex-encoded string of ciphertext, returns a hashmap where keys
 /// are bytes and values are the frequencies of those bytes
-fn freq_analysis(input: &str) -> collections::HashMap<&str, u32> {
+pub fn freq_analysis(input: &str) -> collections::HashMap<&str, u32> {
     let mut freq_table = collections::HashMap::new();
     // so I guess the "best" way to step thru iterators (with the step_by() function)
     // is unstable right now, so in order to compile this on stable rust, I'm using
