@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+FILENAME=$(basename "$1")
+BINPATH=$(basename $(dirname "$1"))/${FILENAME%.*}
+rustc -o bin/${BINPATH} $1
+bin/${BINPATH} "${@:2}"
