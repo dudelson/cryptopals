@@ -3,4 +3,6 @@
 FILENAME=$(basename "$1")
 BINPATH=$(basename $(dirname "$1"))/${FILENAME%.*}
 rustc -o bin/${BINPATH} $1
+# separate compiler output from program output
+echo "======================================================================="
 bin/${BINPATH} "${@:2}"

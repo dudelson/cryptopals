@@ -14,7 +14,6 @@
  * confirmed that my frequency analysis would have worked had I though to try out
  * a space as the most frequently-occuring character.
  */
-// note that 'x' instead of 'X' will make legible but incorrect ciphertext!!!
 use std::collections;
 
 /// given a hex-encoded string of ciphertext, returns a hashmap where keys
@@ -40,7 +39,6 @@ fn freq_analysis(input: &str) -> collections::HashMap<&str, u32> {
 /// of equal length to the ciphertext and filled it with the key, and then called
 /// fixed_xor from challenge 2. Live and learn.
 fn decrypt(ciphertext: &str, encryption_char: char) -> String {
-    println!("args: {}, {}", ciphertext, encryption_char);
     let mut s = "".to_string();
     let mut i = 0;
     while i < ciphertext.len() {
@@ -50,7 +48,6 @@ fn decrypt(ciphertext: &str, encryption_char: char) -> String {
         s.push(ascii as char);
         i += 2;
     }
-    println!("returning {}", s);
     s
 }
 
@@ -121,6 +118,6 @@ fn main2() {
 
 fn main() {
     // only one of these should run
-    //main1();
-    main2();
+    main1();
+    //main2();
 }
