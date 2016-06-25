@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 
-mod challenge2_fixedXOR;
-mod challenge3_singleByteXOR;
+// I couldn't figure out any other way to import a file in a parent directory...
+#[path="../cryptoutil.rs"]
+mod cryptoutil;
 
 use std::fs::File;
 use std::io::{BufReader, BufRead};
@@ -11,6 +12,10 @@ use std::fmt::Write;
 // I replaced all the calls to unwrap() with match statements while trying to debug
 // an error, but it turns out it wasn't in this file
 fn main() {
+    // we're going to be looking for the ciphertext with the highest overall score
+    let mut overall_highest_score = 0;
+    let mut answer = "".to_string();
+    let mut answer_index = 0;
     // this is probably how you open a file in rust
     let file = match File::open("src/set1/4.txt") {
         Ok(v) => v,
@@ -18,22 +23,13 @@ fn main() {
     };
     let ciphertexts = BufReader::new(&file);
     for (i, line) in ciphertexts.lines().enumerate() {
-        let ciphertext = match line {
+        let hex_ciphertext = match line {
             Ok(v) => v,
             Err(e) => panic!("Invalid line\n{}", e),
         };
-        // associate bytes with their frequencies and sort by frequency
-        // this code is copied from challenge 3
-        let freq_table = challenge3_singleByteXOR::freq_analysis(&ciphertext);
-        let mut sorted: Vec<_> = freq_table.iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(a.1));
-
-        // this is the most frequent byte in the ciphertext
-        // it should be interpreted as an encrypted ascii code
-        let most_freq_ascii = match u8::from_str_radix(sorted[0].0, 16) {
-            Ok(v) => v,
-            Err(e) => panic!("Failed to convert byte to ascii\n{:?}", e),
-        };
+        // get the most frequency-occuring byte value in the ciphertext
+        let hex_mfb = cryptoutil::hex_top_freq(&hex_ciphertext, 1)[0]; // "most frequent byte"
+        let mfb = u8::from_str_radix(&hex_mfb, 16).unwrap();
 
         // this is a list of possible most-frequent plaintext characters
         let candidates = vec![' ', 'e', 't', 'a', 'o', 'i'];
@@ -41,36 +37,38 @@ fn main() {
         // for each candidate char, decrypt the ciphertext under the assumption
         // that that is the most common char in the plaintext.
         let mut highest_score = 0;
-        let mut highest_plaintext = "".to_string();
+        let mut ascii_highest_plaintext = "".to_string();
         for c in &candidates {
-            let key_ascii = most_freq_ascii ^ (*c as u8);
-            let mut key_byte = "".to_string();
-            write!(&mut key_byte, "{:02x}", key_ascii).unwrap();
-            let key_buffer: String = iter::repeat(key_byte).take(ciphertext.len()/2).collect();
-            let xor: String = challenge2_fixedXOR::fixed_xor(&ciphertext, &key_buffer);
-
-            let mut plaintext = "".to_string();
-            let mut i = 0;
-            while i < xor.len() {
-                let ascii = u8::from_str_radix(&xor[i..i+2], 16).unwrap();
-                plaintext.push(ascii as char);
-                i += 2;
-            }
+            let key: u8 = mfb ^ (*c as u8);
+            let mut hex_key = "".to_string();
+            write!(&mut hex_key, "{:02x}", key).unwrap();
+            let hex_key_buffer: String = iter::repeat(hex_key).take(hex_ciphertext.len()/2).collect();
+            let hex_plaintext: String = cryptoutil::hex_to_hex_xor(&hex_ciphertext, &hex_key_buffer);
+            let ascii_plaintext: String = cryptoutil::hex_to_ascii(&hex_plaintext);
 
             // score the resulting plaintext by frequency of common english letters
             let mut score = 0;
-            for p in plaintext.chars() {
-                if candidates.contains(&p) { score += 1; }
+            for c in ascii_plaintext.chars() {
+                if candidates.contains(&c) { score += 1; }
             }
 
             if score > highest_score {
                 highest_score = score;
-                highest_plaintext = plaintext;
+                ascii_highest_plaintext = ascii_plaintext;
             }
         }
 
         // print out the highest score for this ciphertext
         println!("Highest-scoring ({}) plaintext for ciphertext #{} is: {}",
-                  highest_score, i+1, highest_plaintext);
+                  highest_score, i+1, ascii_highest_plaintext);
+
+        if highest_score > overall_highest_score {
+            overall_highest_score = highest_score;
+            answer = ascii_highest_plaintext.clone();
+            answer_index = i;
+        }
     }
+
+    println!("The message is: {}\nCiphertext #{}, score {}",
+             answer, answer_index, overall_highest_score);
 }
