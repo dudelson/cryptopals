@@ -1,1 +1,6 @@
 bin
+
+# ignore things related to tests (for now, until I can get the test harness to work)
+tests/
+test_harness.rs
+test_harness
