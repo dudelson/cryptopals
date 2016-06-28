@@ -205,3 +205,7 @@ pub fn ascii_top_freq(s: &str, n: usize) -> Vec<char> {
     chars.truncate(n);
     chars
 }
+
+pub fn slice_iter(s: &str, n: usize) -> Iterator?? {
+    unimplemented!();
+}
