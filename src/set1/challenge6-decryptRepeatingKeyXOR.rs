@@ -4,7 +4,6 @@ mod cryptoutil;
 use std::fs::File;
 use std::io::{Read, BufRead, BufReader};
 use std::ops::Range;
-use std::cmp;
 use std::cmp::Ordering::Less;
 use std::iter;
 use std::fmt::Write;
@@ -29,13 +28,13 @@ fn hamming_distance(s: &str, t: &str) -> u32 {
 
 fn main() {
     // read the base64-encoded ciphertext out of the file and into a buffer w/o newlines
-    let mut file = File::open("src/set1/6.txt").expect("Failed to open input file");
+    let file = File::open("src/set1/6.txt").expect("Failed to open input file");
     let filebuf = BufReader::new(&file);
     let b64_ciphertext = filebuf.lines().fold(String::new(),
                                               |s, x| s + &x.expect("Error concatenating ciphertext"));
 
     // convert base64 to hex
-    let mut hex_ciphertext = cryptoutil::base64_to_hex(&b64_ciphertext);
+    let hex_ciphertext = cryptoutil::base64_to_hex(&b64_ciphertext);
 
     // get the normalized hamming distance between the first two blocks for each keysize
     let mut normalized_hds: Vec<(usize, f64)> = vec![];
@@ -61,11 +60,12 @@ fn main() {
         // This makes the code a lot easier to write and does not affect the
         // scoring to the best of my knowledge.
         let size = key_size*2;
-        let mut len = &hex_ciphertext.len();
-        let hex_ciphertext_padded = hex_ciphertext.clone() + &String::from_utf8(vec![b'0'; size - (len % size)]).unwrap();
+        let len = &hex_ciphertext.len();
+        let hex_ciphertext_padded = hex_ciphertext.clone() +
+                                    &String::from_utf8(vec![b'0'; size - (len % size)]).unwrap();
         let pad_len = hex_ciphertext_padded.len();
         let blocks = (0..).take(pad_len).filter(|&x| x % size == 0)
-                          .map(|i| &hex_ciphertext[i..i+size]);
+                          .map(|i| &hex_ciphertext_padded[i..i+size]);
         // transpose the blocks
         // there's probably some mind-blowingly elegant way to do this with iterator
         // adapters, but I have not yet attained that level of functional programming
@@ -79,9 +79,6 @@ fn main() {
             }
         }
 
-        for tb in transposed_blocks.iter() {
-            println!("{}", tb);
-        }
         // solve each block as single-character XOR
 
         // this is a list of possible most-frequent plaintext characters
@@ -97,11 +94,12 @@ fn main() {
             // that that is the most common char in the plaintext.
             let mut highest_score = 0;
             let mut hex_highest_key = String::new();
+            let mut ascii_highest_plaintext = String::new();
             for c in &candidates {
                 let key: u8 = mfb ^ (*c as u8);
                 let mut hex_key = String::new();
                 write!(&mut hex_key, "{:02x}", key).unwrap();
-                let hex_key_buffer: String = iter::repeat(hex_key.clone()).take(tb.len()/2).collect();
+                let hex_key_buffer: String = hex_key.chars().cycle().take(tb.len()).collect();
                 let hex_plaintext: String = cryptoutil::hex_to_hex_xor(&tb, &hex_key_buffer);
                 let ascii_plaintext: String = cryptoutil::hex_to_ascii(&hex_plaintext);
 
@@ -114,8 +112,15 @@ fn main() {
                 if score > highest_score {
                     highest_score = score;
                     hex_highest_key = hex_key;
+                    ascii_highest_plaintext = ascii_plaintext;
                 }
             }
+            // keep in mind that because these are the transposed blocks that
+            // are being scored, the key will be a single char, and the plaintext
+            // will most likely not make sense (but it should contain all readable
+            // english stuff)
+            println!("\n\nThis block: keylen={}, score={}, key={}, plaintext:\n{}",
+                     key_size, highest_score, hex_highest_key, ascii_highest_plaintext);
 
             // append the most likely key char to the "final key"
             hex_final_key.push_str(&hex_highest_key);
@@ -123,7 +128,7 @@ fn main() {
 
         // decrypt the full message with our derived key!
         // this code is more or less straight out of challenge 1-5
-        let hex_key_buffer: String = hex_final_key.chars().cycle().take(hex_ciphertext.len()*2).collect();
+        let hex_key_buffer: String = hex_final_key.chars().cycle().take(hex_ciphertext.len()).collect();
         let hex_plaintext = cryptoutil::hex_to_hex_xor(&hex_key_buffer, &hex_ciphertext);
 
         let ascii_key = cryptoutil::hex_to_ascii(&hex_final_key);
@@ -132,11 +137,13 @@ fn main() {
         // score this plaintext
         // the plaintext with the highest score among all the key lengths is printed
         // out as the final answer
-        let ascii_top_five = cryptoutil::ascii_top_freq(&ascii_plaintext, 5);
+        let ascii_top_six = cryptoutil::ascii_top_freq(&ascii_plaintext, 6);
         let mut score = 0;
         for c in &candidates {
-            if ascii_top_five.contains(c) { score += 1; }
+            if ascii_top_six.contains(c) { score += 1; }
         }
+        println!("\n\nTop six: {}", ascii_top_six.into_iter().collect::<String>());
+        println!("plaintext decrypted with key of length {} was scored {}\n\n", key_size, score);
         if score > highest_overall_score {
             highest_overall_score = score;
             highest_ascii_key = ascii_key;
