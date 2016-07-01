@@ -7,16 +7,17 @@ use std::ops::Range;
 use std::cmp::Ordering::Less;
 use std::iter;
 use std::fmt::Write;
+use std::collections::HashMap;
 
 /// the range of key lengths to try when attempting decryption
 const ASCII_KEYSIZE_RANGE: Range<usize> = 2..40;
-const LETTER_FREQS: Vec<(u8, f64)> = vec![
+const LETTER_FREQS: [(char, f64); 26]= [
     ('a', 8.16), ('b', 1.49), ('c', 2.78), ('d', 4.25), ('e', 12.7), ('f', 2.22),
     ('g', 2.02), ('h', 6.09), ('i', 6.97), ('j', 0.15), ('k', 0.77), ('l', 4.03),
     ('m', 2.41), ('n', 6.75), ('o', 7.51), ('p', 1.93), ('q', 0.10), ('r', 5.99),
     ('s', 6.44), ('t', 9.01), ('u', 2.76), ('v', 0.98), ('w', 2.36), ('x', 0.15),
     ('y', 1.97), ('z', 0.07)
-]
+];
 
 /// computes the hamming distance between two strings
 /// that is, this function returns the number of differing bits between
@@ -83,7 +84,7 @@ fn main() {
                                 ).unwrap();
     let pad_len = hex_ciphertext_padded.len();
     let blocks = (0..).take(pad_len).filter(|&x| x % hex_key_size == 0)
-                      .map(|i| &hex_ciphertext_padded[i..i+size]);
+                      .map(|i| &hex_ciphertext_padded[i..i+hex_key_size]);
     // transpose the blocks
     // there's probably some mind-blowingly elegant way to do this with iterator
     // adapters, but I have not yet attained that level of functional programming
@@ -107,33 +108,64 @@ fn main() {
         // Try every printable ascii char as a key
         // The key that generates the plaintext with the lowest chi-square value
         // is the one we append to the final key
-        for key in (32..127) {
-            let hex_key = format!("{:02x}", key as char);
+        let mut best_chi_square = ::std::f64::INFINITY;
+        let mut hex_best_key_letter = "NULL".to_string();
+        for key in 32..127 {
+            let hex_key = format!("{:02x}", key as u8);
             let hex_key_buffer: String = hex_key.chars().cycle().take(tb.len()).collect();
             let hex_plaintext = cryptoutil::hex_to_hex_xor(&hex_key_buffer, &tb);
             let ascii_plaintext = cryptoutil::hex_to_ascii(&hex_plaintext);
 
-            let freq_table = cryptoutil::ascii_freq_analysis(&ascii_plaintext);
-            // convert the frequency table into a vector of (char, percentage)
-            let percentages = freq_table.into_iter().map(|(letter, count)| {
-                (letter, (count as f64) / tb.len())
-            });
+            let mut freq_table = cryptoutil::ascii_freq_analysis(&ascii_plaintext);
+            //println!("{:?}", freq_table);
+            // we're going to keep only the frequencies of lowercase letters, so
+            // add the counts of uppercase letters to the lowercase letter counts
+            // in order for the uppercase letters to still be counted
+            let mut lowercase_freq_table = HashMap::<char, u32>::new();
+            let default = 0;
+            for i in 97..123 { // 'a' to 'z' inclusive
+                let c = i as u8 as char;
+                let lowercase_freq = freq_table.get(&c).unwrap_or(&default);
+                lowercase_freq_table.insert(c, *lowercase_freq);
+            }
+
+            for i in 65..91 { // 'A' to 'Z' inclusive
+                let c = i as u8 as char;
+                let uppercase_freq = freq_table.get(&c).unwrap_or(&default);
+                let lowercase_freq = lowercase_freq_table
+                                     .get_mut(&c.to_lowercase().next().unwrap())
+                                     .unwrap();
+                *lowercase_freq += *uppercase_freq;
+            }
+            // convert the frequency table into a vector of (char, percentage),
+            // only keeping the lowercase letters
+            let mut percentages = lowercase_freq_table.into_iter()
+                //.inspect(|&(l, c)| println!("{}: {}", l, c))
+                .map(|(letter, count)| (letter, (count as f64) / (tb.len() as f64)))
+                .collect::<Vec<(char, f64)>>();
+            percentages.sort_by(|a, b| a.0.cmp(&b.0));
+            //println!("{:?}", percentages);
             // google suggests that the standard way to measure the correlation of
             // two histograms is the chi-square test
             // I have no idea if I'm implementing this correctly
 
-            /*
-             * okay actually I think this can be written in the cleanest way using
-             * `fold`. See here: http://www.itl.nist.gov/div898/handbook/eda/section3/eda35f.htm
-             *
-            for (observed, expected) in percentages.zip(LETTER_FREQS.iter()) {
+            // I could have used the `fold` iterator consumer here, but I think
+            // it would have become too messy
+            let mut chi_square = 0.0;
+            for (observed, expected) in percentages.into_iter().zip(LETTER_FREQS.iter()) {
                 // we should be comparing stats for the same letter
                 assert_eq!(observed.0, expected.0);
-                let (o_value, e_value) = observed.1, expected.1;
-                let chi_square = 
+                let (o_value, e_value) = (observed.1, expected.1);
+                chi_square += (o_value - e_value) * (o_value - e_value) / e_value;
             }
-            */
+
+            if chi_square < best_chi_square {
+                best_chi_square = chi_square;
+                hex_best_key_letter = hex_key.clone();
+            }
         }
+
+        hex_final_key.push_str(&hex_best_key_letter.clone());
     }
 
     // decrypt the full message with our derived key!
